@@ -12,3 +12,11 @@ path = kagglehub.dataset_download("tpotterer/motley-fool-data.pkl")
 print("Path to dataset files:", path)
 
 Else, download to local and read pkl file. 
+
+# Input Data
+
+# Features 
+
+# Target Definition 
+
+# Transcript 
