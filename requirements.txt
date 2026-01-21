@@ -1,0 +1,35 @@
+# Core numerical & data handling
+numpy
+pandas
+scipy
+
+# Machine learning
+scikit-learn
+
+# Deep learning
+torch
+
+# NLP / Transformers
+transformers
+
+# Financial data & utilities
+yfinance
+
+# Visualization
+matplotlib
+seaborn
+
+# Progress bars & utilities
+tqdm
+
+# Jupyter / notebooks
+jupyter
+ipykernel
+
+# File formats
+pyarrow
+fastparquet
+
+# General utilities
+python-dateutil
+
