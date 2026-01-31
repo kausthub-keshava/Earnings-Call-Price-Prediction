@@ -7,6 +7,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 from data_cleaning_util import prepare_earnings_data
 import re
+from finbert_models_utils import bootstrap_auc_ci
+
 
 FOOTER_MARKERS = [
     r"Transcript powered by",
@@ -121,7 +123,7 @@ def random_model(y_train,y_test,seed=42):
     accuracy_random = accuracy_score(y_test, y_pred_random)
     auc_random=roc_auc_score(y_test, p_pred_random)
 
-    return accuracy_random,auc_random
+    return p_pred_random,accuracy_random,auc_random
 
 def finance_only_logistic_regression(X_train_fin, y_train, X_test_fin, y_test,C=1.0):
     '''
@@ -147,7 +149,7 @@ def finance_only_logistic_regression(X_train_fin, y_train, X_test_fin, y_test,C=
     accuracy_fin = accuracy_score(y_test, y_pred_fin)
     auc_fin = roc_auc_score(y_test, y_prob_fin)
 
-    return accuracy_fin, auc_fin
+    return y_prob_fin,accuracy_fin, auc_fin
 
 def clean_transcript(text,FOOTER_MARKERS = FOOTER_MARKERS,HONORIFIC_NAME_PATTERN = HONORIFIC_NAME_PATTERN,keep_section="prepared"):
     """
@@ -251,13 +253,14 @@ def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_word
         test_accuracy = accuracy_score(y_test, text_model.predict(X_test_tfidf))
 
         if test_auc > best_test_auc:
+            best_probs= test_probs
             best_test_auc = test_auc
             best_test_accuracy = test_accuracy
             best_C = C
             best_model = text_model
 
     if not return_top_words:
-        return best_test_auc, best_test_accuracy
+        return best_probs,best_test_auc, best_test_accuracy
 
     try:
         vectorizer = getattr(tfidf_vectorize, "vectorizer", None)
@@ -271,7 +274,7 @@ def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_word
     top_idx = np.argsort(np.abs(coefs))[::-1][:50] 
     top_words = [feature_names[i] for i in top_idx]
 
-    return best_test_auc, best_test_accuracy, top_words
+    return best_probs,best_test_auc, best_test_accuracy, top_words
 
 
 def finance_tfidf_model(features_base_train, X_train_fin, y_train, features_base_val, X_val_tfidf,  features_base_test, X_test_fin, y_test,
@@ -296,15 +299,15 @@ def finance_tfidf_model(features_base_train, X_train_fin, y_train, features_base
     features_finance_tfidf_train = np.hstack([features_base_train, X_train_tfidf.toarray()])
     features_finance_tfidf_test  = np.hstack([features_base_test, X_test_tfidf.toarray()])
 
-    finance_text_model_5d = LogisticRegression(C=1.0,solver='liblinear',max_iter=2000)
-    finance_text_model_5d.fit(features_finance_tfidf_train, y_train)
-    test_probs_5d = finance_text_model_5d.predict_proba(features_finance_tfidf_test)[:, 1]
-    test_auc_5d = roc_auc_score(y_test, test_probs_5d)
-    test_accuracy_5d = accuracy_score(y_test, finance_text_model_5d.predict(features_finance_tfidf_test))
+    finance_text_model= LogisticRegression(C=1.0,solver='liblinear',max_iter=2000)
+    finance_text_model.fit(features_finance_tfidf_train, y_train)
+    test_probs = finance_text_model.predict_proba(features_finance_tfidf_test)[:, 1]
+    test_auc = roc_auc_score(y_test, test_probs)
+    test_accuracy = accuracy_score(y_test, finance_text_model.predict(features_finance_tfidf_test))
 
-    return test_auc_5d, test_accuracy_5d
+    return test_probs,test_auc, test_accuracy
 
-def call_model(MODEL = "random", RETURNS_PERIOD = 5):
+def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
     '''
     Calls the specified baseline model.
     
@@ -312,7 +315,7 @@ def call_model(MODEL = "random", RETURNS_PERIOD = 5):
     - MODEL: str, name of the model to be called. Options are "random", "finance_only", "tfidf", "finance_tfidf".
 
     Returns:
-    - results: dict, containing accuracy and AUC of the specified model.
+    - results: dict, containing accuracy, AUC and AUC CI of the specified model.
     '''
     # Load and prepare data
     if MODEL not in ["random", "finance_only", "tfidf", "finance_tfidf"]:
@@ -333,37 +336,41 @@ def call_model(MODEL = "random", RETURNS_PERIOD = 5):
     results = {}
 
     if MODEL == "random":
-        accuracy_random, auc_random = random_model(y_train, y_test)
+        logit_random,accuracy_random, auc_random = random_model(y_train, y_test)
         results['accuracy'] = accuracy_random
         results['auc'] = auc_random
-        print(f"Random Model - Accuracy: {accuracy_random:.4f}, AUC: {auc_random:.4f}")
+        results['ci']=bootstrap_auc_ci(y_test, logit_random)
+        print(f"Random Model - Accuracy: {accuracy_random:.4f}, AUC: {auc_random:.4f}, CI: {results['ci']}")
 
     elif MODEL == "finance_only":
-        accuracy_fin, auc_fin = finance_only_logistic_regression(X_train_fin, y_train, X_test_fin, y_test)
+        logit_fin,accuracy_fin, auc_fin = finance_only_logistic_regression(X_train_fin, y_train, X_test_fin, y_test)
         results['accuracy'] = accuracy_fin
         results['auc'] = auc_fin
-        print(f"Finance Only Model - Accuracy: {accuracy_fin:.4f}, AUC: {auc_fin:.4f}")
+        results['ci']=bootstrap_auc_ci(y_test, logit_fin)
+        print(f"Finance Only Model - Accuracy: {accuracy_fin:.4f}, AUC: {auc_fin:.4f}, CI: {results['ci']}")
 
     elif MODEL == "tfidf":
-        best_test_auc, best_test_accuracy = tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test)
+        logit_tfidf,best_test_auc, best_test_accuracy = tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test)
         results['auc'] = best_test_auc
         results['accuracy'] = best_test_accuracy
-        print(f"TF-IDF Model - Accuracy: {best_test_accuracy:.4f}, AUC: {best_test_auc:.4f}")
+        results['ci']=bootstrap_auc_ci(y_test, logit_tfidf)
+        print(f"TF-IDF Model - Accuracy: {best_test_accuracy:.4f}, AUC: {best_test_auc:.4f}, CI: {results['ci']}")
 
     elif MODEL == "finance_tfidf":
         X_train_tfidf, X_val_tfidf, X_test_tfidf = tfidf_vectorize(train_df, val_df, test_df)
-        test_auc, test_accuracy = finance_tfidf_model(X_train_fin, X_train_fin, y_train, X_val_fin, X_val_tfidf, X_test_fin, X_test_fin, y_test,
+        logit_tfidf_fin,test_auc, test_accuracy = finance_tfidf_model(X_train_fin, X_train_fin, y_train, X_val_fin, X_val_tfidf, X_test_fin, X_test_fin, y_test,
                                           X_train_tfidf, X_test_tfidf)
         results['auc'] = test_auc
         results['accuracy'] = test_accuracy
-        print(f"Finance + TF-IDF Model - Accuracy: {test_accuracy:.4f}, AUC: {test_auc:.4f}")
+        results['ci']=bootstrap_auc_ci(y_test, logit_tfidf_fin)
+        print(f"Finance + TF-IDF Model - Accuracy: {test_accuracy:.4f}, AUC: {test_auc:.4f}, CI: {results['ci']}")
 
     return "Success"
 
 def main():
     models = ["random", "finance_only", "tfidf", "finance_tfidf"]
     for model in models:
-        results = call_model(MODEL=model, RETURNS_PERIOD=5)
+        results = call_baseline_model(MODEL=model, RETURNS_PERIOD=5)
         print(f"Model: {model}, Accuracy: {results['accuracy']:.4f}, AUC: {results['auc']:.4f}")
 
 if __name__ == "__main__":

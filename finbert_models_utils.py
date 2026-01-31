@@ -6,6 +6,8 @@ from sklearn.metrics import roc_auc_score
 import os
 from torch.utils.data import Dataset
 import glob
+from config import CACHE_DIR
+
 
 class CachedDataset(Dataset):
     """
@@ -238,7 +240,7 @@ def eval_loop_auc(model, loader, device):
         device (torch.device): Device to run the evaluation on.
 
     Returns:
-        tuple: Average loss and AUC score.        
+        tuple: Logits,Average loss and AUC score.        
     """
     model.eval()
     total_loss, n = 0.0, 0
@@ -267,13 +269,13 @@ def eval_loop_auc(model, loader, device):
 
     auc = roc_auc_score(labels, logits)
 
-    return avg_loss, auc
+    return logits,avg_loss, auc
 
 
 @torch.no_grad()
 def eval_loop_auc_fin(model, loader, device):
     """
-Evaluation loop that computes average loss and AUC over the dataset, for models that take financial features and transcript embeddings.
+Evaluation loop that computes y_scores, average loss and AUC over the dataset, for models that take financial features and transcript embeddings.
 
     Args:
         model (nn.Module): The model to evaluate.   
@@ -281,7 +283,7 @@ Evaluation loop that computes average loss and AUC over the dataset, for models 
         device: Device to run the evaluation on.
 
     Returns:
-        tuple: Average loss and AUC score.        
+        tuple: y_scores, Average loss and AUC score.        
     """
     model.eval()
     total_loss, n = 0.0, 0
@@ -311,7 +313,7 @@ Evaluation loop that computes average loss and AUC over the dataset, for models 
 
     auc = roc_auc_score(labels, logits)
 
-    return avg_loss, auc
+    return logits,avg_loss, auc
 
 
 def train_with_early_stopping(
@@ -372,7 +374,7 @@ Stops training if validation AUC does not improve for a specified number of epoc
         n += y.size(0)
 
         train_loss = total_loss / n
-        val_loss, val_auc = eval_loop_auc(model, val_loader, device)
+        val_logits,val_loss, val_auc = eval_loop_auc(model, val_loader, device)
 
         print(
             f"epoch {epoch:02d} | "
@@ -455,7 +457,7 @@ Stops training if validation AUC does not improve for a specified number of epoc
         n += y.size(0)
 
         train_loss = total_loss / n
-        val_loss, val_auc = eval_loop_auc_fin(model, val_loader, device)
+        val_logits,val_loss, val_auc = eval_loop_auc_fin(model, val_loader, device)
 
         print(
             f"epoch {epoch:02d} | "
@@ -479,7 +481,7 @@ Stops training if validation AUC does not improve for a specified number of epoc
     return model
 
 
-def load_cached_finbert_dataset(cache_dir,split,batch_size=16,shuffle=True):
+def load_cached_finbert_dataset(split,return_days=1,cache_dir=CACHE_DIR,batch_size=16,shuffle=True):
     """
     Loads a cached FinBERT dataset from disk.
 
@@ -494,7 +496,7 @@ def load_cached_finbert_dataset(cache_dir,split,batch_size=16,shuffle=True):
     """
     from torch.utils.data import DataLoader
 
-    split_cache_dir = os.path.join(cache_dir, split)
+    split_cache_dir = os.path.join(cache_dir,split,return_days)
     dataset = CachedDataset(split_cache_dir)
     dataloader = DataLoader(
         dataset,
@@ -503,7 +505,7 @@ def load_cached_finbert_dataset(cache_dir,split,batch_size=16,shuffle=True):
         collate_fn=collate_pad)
     return dataloader
 
-def load_cached_finbert_fin_dataset(cache_dir, split,batch_size=16,shuffle=True):
+def load_cached_finbert_fin_dataset(split,return_days=1,cache_dir=CACHE_DIR,batch_size=16,shuffle=True):
     """
     Loads a cached FinBERT dataset with financial features from disk.
 
@@ -518,7 +520,7 @@ def load_cached_finbert_fin_dataset(cache_dir, split,batch_size=16,shuffle=True)
     """
     from torch.utils.data import DataLoader
 
-    split_cache_dir = os.path.join(cache_dir, split)
+    split_cache_dir = os.path.join(cache_dir, split,return_days)
     dataset = CachedZFinDataset(split_cache_dir)
     dataloader = DataLoader(
         dataset,
@@ -527,25 +529,63 @@ def load_cached_finbert_fin_dataset(cache_dir, split,batch_size=16,shuffle=True)
         collate_fn=collate_pad_chunks_with_fin)
     return dataloader
 
-def call_model(Model=AttnMLPPoolClassifier,return_period=1):
+
+def bootstrap_auc(y_true, y_scores, n_bootstraps=1000, random_seed=42):
     """
-    trains the specifed model at the given return period and returns the trained model, test loss and test AUC.
+    Computes bootstrap confidence intervals for AUC.
+
+    Args:
+        y_true (array-like): True binary labels.
+        y_scores (array-like): Predicted scores.
+        n_bootstraps (int): Number of bootstrap samples.
+        random_seed (int): Random seed for reproducibility.
+    Returns:
+        tuple: (lower_bound, upper_bound) of 95% confidence interval for AUC
+    """
+    import numpy as np
+
+    rng = np.random.RandomState(random_seed)
+    bootstrapped_scores = []
+
+    y_true = np.array(y_true)
+    y_scores = np.array(y_scores)
+
+    for i in range(n_bootstraps):
+        indices = rng.randint(0, len(y_scores), len(y_scores))
+        if len(np.unique(y_true[indices])) < 2:
+            continue
+        score = roc_auc_score(y_true[indices], y_scores[indices])
+        bootstrapped_scores.append(score)
+
+    sorted_scores = np.array(bootstrapped_scores)
+    sorted_scores.sort()
+
+    lower_bound = sorted_scores[int(0.025 * len(sorted_scores))]
+    upper_bound = sorted_scores[int(0.975 * len(sorted_scores))]
+
+    return lower_bound, upper_bound
+
+def call_model(Model="AttnMLPPoolClassifier",dim=768, attn_hidden=256, hidden=256, dropout=0.2,return_period=1):
+    """
+    trains the specifed model at the given return period and returns the trained model, test loss and test AUC confidence intervals.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    cache_dir = f"./cached_finbert_embeddings/finbert_{return_period}r"
-
     train_loader = load_cached_finbert_dataset(
-        cache_dir, split="train", batch_size=16, shuffle=True
+        cache_dir=CACHE_DIR, split="train",return_days=1 ,batch_size=16, shuffle=True
     )
     val_loader = load_cached_finbert_dataset(
-        cache_dir, split="val", batch_size=16, shuffle=False
+        cache_dir=CACHE_DIR, split="val",return_days=1,batch_size=16, shuffle=False
     )
     test_loader = load_cached_finbert_dataset(
-        cache_dir, split="test", batch_size=16, shuffle=False
+        cache_dir=CACHE_DIR, split="test",return_days=1,batch_size=16, shuffle=False
     )
 
-    model = Model().to(device)
+    if Model=="MeanPoolClassifier":
+        model = MeanPoolClassifier(dim=dim, hidden=hidden, dropout=dropout).to(device)
+    elif Model=="AttnPoolClassifier":
+        model = AttnPoolClassifier(dim=dim, hidden=hidden, dropout=dropout).to(device)
+    elif Model=="AttnMLPPoolClassifier":
+        model = AttnMLPPoolClassifier(dim=dim, attn_hidden=attn_hidden, hidden=hidden, dropout=dropout).to(device)
 
     model = train_with_early_stopping(
         model,
@@ -559,6 +599,55 @@ def call_model(Model=AttnMLPPoolClassifier,return_period=1):
         save_path=f"best_model_{return_period}r.pt",
     )
 
-    test_loss, test_auc = eval_loop_auc(model, test_loader, device)
+    test_logits,test_loss, test_auc = eval_loop_auc(model, test_loader, device)
 
-    return model, test_loss, test_auc
+    test_auc_ci = bootstrap_auc(
+        y_true=[y for _, _, y in test_loader.dataset],
+        y_scores=test_logits,
+        n_bootstraps=1000,
+        random_seed=42,
+    )
+
+    return model, test_loss, test_auc, test_auc_ci
+
+def call_model_fin(Model="AttnPoolTwoTower",dim=768, fin_dim=4, hidden=256, dropout=0.2,return_period=1):
+    """
+    trains the specifed model at the given return period and returns the trained model, test loss and test AUC.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    train_loader = load_cached_finbert_fin_dataset(
+        cache_dir=CACHE_DIR, split="train",return_days=return_period ,batch_size=16, shuffle=True
+    )
+    val_loader = load_cached_finbert_fin_dataset(
+        cache_dir=CACHE_DIR, split="val",return_days=return_period,batch_size=16, shuffle=False
+    )
+    test_loader = load_cached_finbert_fin_dataset(
+        cache_dir=CACHE_DIR, split="test",return_days=return_period,batch_size=16, shuffle=False
+    )
+    if Model=="AttnPoolTwoTower":
+        model = AttnPoolTwoTower(dim=768, fin_dim=4, hidden=256, dropout=0.2).to(device)
+
+    model = train_with_early_stopping_fin(
+        model,
+        train_loader,
+        val_loader,
+        device,
+        max_epochs=50,
+        patience=7,
+        lr=1e-3,
+        weight_decay=1e-2,
+        save_path=f"best_model_fin_{return_period}r.pt",
+    )
+
+    test_logits,test_loss, test_auc = eval_loop_auc_fin(model, test_loader, device)
+
+    test_auc_ci = bootstrap_auc(
+        y_true=[y for _, _, _, y in test_loader.dataset],
+        y_scores=test_logits,
+        n_bootstraps=1000,
+        random_seed=42,
+    )
+
+    return model, test_loss, test_auc, test_auc_ci
+
+
