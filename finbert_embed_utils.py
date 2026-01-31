@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
 from baseline_models import test_train_split_by_date, scale_features
-
+from config import CACHE_DIR
 
 def setup_finbert():
     """
@@ -172,7 +172,7 @@ def zip_cache(cache_dir, zip_path):
 
 
 
-def create_finbert_cache(raw_data,cache_dir,return_days=1,overlap=50):
+def create_finbert_cache(raw_data,cache_dir=CACHE_DIR,return_days=1,overlap=50):
     """
     High-level function to create FinBERT cache from raw data.
     First split data by date into train/val/test, scale financial features, zip them and then input to create finbert cache.
@@ -196,8 +196,9 @@ def create_finbert_cache(raw_data,cache_dir,return_days=1,overlap=50):
     train_data, val_data, test_data = list(zip(train_transcripts, y_train_1d, train_features)), list(zip(val_transcripts, y_val_1d, val_features)), list(zip(test_transcripts, y_tet_1d, test_features))
     
     for data, split in zip([train_data, val_data, test_data], ["train", "val", "test"]):
-        split_cache_dir = os.path.join(cache_dir, split)    
+        split_cache_dir = os.path.join(cache_dir, split,return_days)
+        zip_path=os.path.join(cache_dir, f"cache_{split}_{return_days}"+".zip")    
         build_cache(data, split_cache_dir, encoder, tokenizer, device, overlap=overlap)
-        zip_cache(split_cache_dir, f"cache_{split}_{return_days}"+".zip")
+        zip_cache(split_cache_dir, zip_path)
 
 
