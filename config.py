@@ -19,3 +19,8 @@ STOCK_DATA_KAGGLE_PATH = os.getenv(
     "STOCK_DATA_KAGGLE_PATH",
     PROJECT_ROOT / "data" / "sp500_stock_data"
 )
+
+CACHE_DIR = os.getenv(
+    "cache_dir",
+    PROJECT_ROOT / ".cache"
+)
