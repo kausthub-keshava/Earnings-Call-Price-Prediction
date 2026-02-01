@@ -4,8 +4,9 @@ from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
 from baseline_models import test_train_split_by_date, scale_features
 from config import CACHE_DIR
+from data_cleaning_util import prepare_earnings_data
 
-def setup_finbert():
+def setup_finbert(model_name = "yiyanghkust/finbert-tone"):
     """
     Sets up the FinBERT model and tokenizer for embedding financial text.
 
@@ -14,7 +15,6 @@ def setup_finbert():
         tokenizer: The FinBERT tokenizer.
         device: torch.device
     """
-    model_name = "yiyanghkust/finbert-tone"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     encoder = AutoModel.from_pretrained(model_name)
 
@@ -196,9 +196,12 @@ def create_finbert_cache(raw_data,cache_dir=CACHE_DIR,return_days=1,overlap=50):
     train_data, val_data, test_data = list(zip(train_transcripts, y_train_1d, train_features)), list(zip(val_transcripts, y_val_1d, val_features)), list(zip(test_transcripts, y_tet_1d, test_features))
     
     for data, split in zip([train_data, val_data, test_data], ["train", "val", "test"]):
-        split_cache_dir = os.path.join(cache_dir, split,return_days)
+        split_cache_dir = os.path.join(cache_dir, split,str(return_days))
         zip_path=os.path.join(cache_dir, f"cache_{split}_{return_days}"+".zip")    
         build_cache(data, split_cache_dir, encoder, tokenizer, device, overlap=overlap)
         zip_cache(split_cache_dir, zip_path)
 
-
+if __name__ == "__main__":
+    raw_data = prepare_earnings_data()
+    create_finbert_cache(raw_data,cache_dir=CACHE_DIR,return_days=1,overlap=50)
+    create_finbert_cache(raw_data,cache_dir=CACHE_DIR,return_days=5,overlap=50)
