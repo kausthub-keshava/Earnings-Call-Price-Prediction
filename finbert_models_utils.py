@@ -496,7 +496,7 @@ def load_cached_finbert_dataset(split,return_days=1,cache_dir=CACHE_DIR,batch_si
     """
     from torch.utils.data import DataLoader
 
-    split_cache_dir = os.path.join(cache_dir,split,return_days)
+    split_cache_dir = os.path.join(cache_dir,split,str(return_days))
     dataset = CachedDataset(split_cache_dir)
     dataloader = DataLoader(
         dataset,
@@ -520,7 +520,7 @@ def load_cached_finbert_fin_dataset(split,return_days=1,cache_dir=CACHE_DIR,batc
     """
     from torch.utils.data import DataLoader
 
-    split_cache_dir = os.path.join(cache_dir, split,return_days)
+    split_cache_dir = os.path.join(cache_dir, split,str(return_days))
     dataset = CachedZFinDataset(split_cache_dir)
     dataloader = DataLoader(
         dataset,
@@ -604,7 +604,7 @@ def call_model(Model="AttnMLPPoolClassifier",dim=768, attn_hidden=256, hidden=25
     test_logits,test_loss, test_auc = eval_loop_auc(model, test_loader, device)
 
     test_auc_ci,test_se = bootstrap_auc_se(
-        y_true=[y for _, _, y in test_loader.dataset],
+        y_true=[y for _, y in test_loader.dataset],
         y_scores=test_logits,
         n_bootstraps=1000,
         random_seed=42,
@@ -644,7 +644,7 @@ def call_model_fin(Model="AttnPoolTwoTower",dim=768, fin_dim=4, hidden=256, drop
     test_logits,test_loss, test_auc = eval_loop_auc_fin(model, test_loader, device)
 
     test_auc_ci,test_se = bootstrap_auc_se(
-        y_true=[y for _, _, _, y in test_loader.dataset],
+        y_true=[y for _, _, y in test_loader.dataset],
         y_scores=test_logits,
         n_bootstraps=1000,
         random_seed=42,
