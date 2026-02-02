@@ -1,42 +1,62 @@
 # Earnings-Call-Price-Prediction
-This project studies whether earnings call transcripts can be used to predict short-horizon (1 day/5 day) stock price reactions around earnings announcements. 
 
-We use two different ways to extract signals from the earnings call transcripts- TF-IDF and FinBERT embeddings and compare them. We also compare the effect of transcripts alone vs transcripts+finance features. 
+## Overview
+This project predicts short-term stock price movements (1-day and 5-day horizons) following earnings announcements by analyzing earnings call transcripts combined with financial metrics.
 
-We compare different models:
-- Baseline model- Random
-- Logistic regressions (with just finance features)
-- Logistic regression with TF-IDF 
-- Logistic regression with TF-IDF + finance features
+## Motivation
+Earnings calls contain valuable qualitative information (management tone, forward guidance) that may not be captured in quantitative metrics alone. This project tests whether NLP can extract predictive signals for trading strategies.
 
-- Simple NN using FinBERT Embeddings (Mean-Pooling and Attention Pooling)
-- Simple NN using FinBERT Emeddings with Attention Pooling+ Finance features
-- SVM using FinBERT Embeddings with SVM
-- SVM using FinBERT Embeddings+finance features 
+## Data
+- **Transcripts**: Motley Fool earnings call transcripts
+- **Financial Data**: S&P 500 price data, Yahoo finance
+- **Time Period**: 
+- **Sample Size**: 
 
-We used time-based splits to split our data into train-val-test datasets. For evaluation, we use AUC and get confidence intervals using bootstrap. 
+## Methodology
+
+### Target Variable
+Binary classification: Market-adjusted stock price increases vs decreases N days post-earnings 
+- 1-day horizon: (Price_t+1 - Price_t) / Price_t > 0
+- 5-day horizon: (Price_t+5 - Price_t) / Price_t > 0
+
+### Feature Engineering
+**Text Features:**
+- TF-IDF: 
+- FinBERT Embeddings: 
+
+**Financial Features:**
+- 
+
+### Models Compared
+1. Random Baseline
+2. Logistic Regression (financial features only)
+3. Logistic Regression + TF-IDF
+4. Neural Network + FinBERT (mean pooling)
+5. Neural Network + FinBERT (attention pooling)
+6. Neural Network + FinBERT + financial features
+7. SVM + FinBERT
+8. SVM + FinBERT + financial features
+
+### Validation
+- Time-based train/validation/test splits (prevents lookahead bias)
+- Evaluation metric: AUC-ROC with 95% confidence intervals (bootstrap)
+
+## Results
 
 
+### Key Findings
+- 
+## Limitations
+- Bootstrap confidence intervals assume IID samples (violated in financial time series - consider block bootstrap)
+- 
+## Future Work
+- Incorporate sentiment scores
+- Test on different market periods (bull vs bear)
+- Extend to longer time horizons
+- Add technical indicators
 
+## Setup & Usage
+Installation instructions:
+How to run the code:
 
-
-
-# Download latest version
-Try the below: 
-path = kagglehub.dataset_download("tpotterer/motley-fool-data.pkl")
-
-print("Path to dataset files:", path)
-
-Else, download to local and read pkl file. 
-
-# Input Data
-Motley Fool Data, S&P 500 and earnings call transcripts
-# Features 
-
-# Target Definition 
-
-# Transcript 
-
-# Results 
-
-While doing the bootstrapping to get the confidence intervals of the AUC score, we assume that the points are IID which is not necessarily true in financial datasets. 
+## References
