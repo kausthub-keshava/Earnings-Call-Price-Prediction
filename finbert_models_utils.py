@@ -601,13 +601,13 @@ def call_model(Model="AttnMLPPoolClassifier",dim=768, attn_hidden=256, hidden=25
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader = load_cached_finbert_dataset(
-        cache_dir=CACHE_DIR, split="train",return_days=1 ,batch_size=16, shuffle=True
+        cache_dir=CACHE_DIR, split="train",return_days=return_period ,batch_size=16, shuffle=True
     )
     val_loader = load_cached_finbert_dataset(
-        cache_dir=CACHE_DIR, split="val",return_days=1,batch_size=16, shuffle=False
+        cache_dir=CACHE_DIR, split="val",return_days=return_period,batch_size=16, shuffle=False
     )
     test_loader = load_cached_finbert_dataset(
-        cache_dir=CACHE_DIR, split="test",return_days=1,batch_size=16, shuffle=False
+        cache_dir=CACHE_DIR, split="test",return_days=return_period,batch_size=16, shuffle=False
     )
 
     if Model=="MeanPoolClassifier":
