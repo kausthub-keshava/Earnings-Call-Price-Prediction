@@ -307,7 +307,7 @@ def finance_tfidf_model(features_base_train, X_train_fin, y_train, features_base
 
     return test_probs,test_auc, test_accuracy
 
-def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
+def call_baseline_model(df = None, MODEL = "random", RETURNS_PERIOD = 5):
     '''
     Calls the specified baseline model.
     
@@ -320,7 +320,7 @@ def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
     # Load and prepare data
     if MODEL not in ["random", "finance_only", "tfidf", "finance_tfidf"]:
         raise ValueError(f"Invalid MODEL: {MODEL}. Choose from 'random', 'finance_only', 'tfidf', 'finance_tfidf'.")
-    df = prepare_earnings_data()
+    
     train_df, val_df, test_df = test_train_split_by_date(df)
     feature_cols = ["abvol_20d", "abcallday_r1", "abcallday_r5", "abcallday_r20"]  
     X_train_fin, X_val_fin, X_test_fin = scale_features(train_df, val_df, test_df, feature_cols)
@@ -342,7 +342,7 @@ def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
         ci,se=bootstrap_auc_se(y_test, logit_random)
         results['ci']=ci
         results['se']=se
-        print(f"Random Model - Accuracy: {accuracy_random:.4f}, AUC: {auc_random:.4f} ± {se:.4f}, CI: {results['ci']}")
+        print(f"Random Model {RETURNS_PERIOD}-day returns- Accuracy: {accuracy_random:.4f}, AUC: {auc_random:.4f} ± {se:.4f}, CI: {results['ci']}")
 
     elif MODEL == "finance_only":
         logit_fin,accuracy_fin, auc_fin = finance_only_logistic_regression(X_train_fin, y_train, X_test_fin, y_test)
@@ -351,7 +351,7 @@ def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
         ci,se=bootstrap_auc_se(y_test, logit_fin)
         results['ci']=ci
         results['se']=se
-        print(f"Finance Only Model - Accuracy: {accuracy_fin:.4f}, AUC: {auc_fin:.4f} ± {se:.4f}, CI: {results['ci']}")
+        print(f"Finance Only Model {RETURNS_PERIOD}-day returns- Accuracy: {accuracy_fin:.4f}, AUC: {auc_fin:.4f} ± {se:.4f}, CI: {results['ci']}")
 
     elif MODEL == "tfidf":
         logit_tfidf,best_test_auc, best_test_accuracy = tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test)
@@ -360,8 +360,7 @@ def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
         ci,se=bootstrap_auc_se(y_test, logit_tfidf)
         results['ci']=ci
         results['se']=se
-        print(f"TF-IDF Model - Accuracy: {best_test_accuracy:.4f}, AUC: {best_test_auc:.4f} ± {se:.4f}, CI: {results['ci']}")
-
+        print(f"TF-IDF Model {RETURNS_PERIOD}-day returns- Accuracy: {best_test_accuracy:.4f}, AUC: {best_test_auc:.4f} ± {se:.4f}, CI: {results['ci']}")
     elif MODEL == "finance_tfidf":
         X_train_tfidf, X_val_tfidf, X_test_tfidf = tfidf_vectorize(train_df, val_df, test_df)
         logit_tfidf_fin,test_auc, test_accuracy = finance_tfidf_model(X_train_fin, X_train_fin, y_train, X_val_fin, X_val_tfidf, X_test_fin, X_test_fin, y_test,
@@ -369,7 +368,9 @@ def call_baseline_model(MODEL = "random", RETURNS_PERIOD = 5):
         results['auc'] = test_auc
         results['accuracy'] = test_accuracy
         ci,se=bootstrap_auc_se(y_test, logit_tfidf_fin)
-        print(f"Finance + TF-IDF Model - Accuracy: {test_accuracy:.4f}, AUC: {test_auc:.4f} ± {se:.4f}, CI: {results['ci']}")
+        results['ci']=ci
+        results['se']=se
+        print(f"Finance + TF-IDF Model {RETURNS_PERIOD}-day returns- Accuracy: {test_accuracy:.4f}, AUC: {test_auc:.4f} ± {se:.4f}, CI: {results['ci']}")
 
     return "Success"
 
