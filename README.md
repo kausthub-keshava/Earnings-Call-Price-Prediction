@@ -64,10 +64,16 @@ Binary classification: Market-adjusted return (subtract the market return value)
 
 
 ### Key Findings
-- 
+- NLP features (FinBERT embeddings) provide some predictive signal, especially for longer horizons (5-day).
+- Combining financial features with text embeddings did not improve performance, possibly due to financial features being weak predictors alone.
+- Attention pooling slightly outperformed mean pooling, indicating certain transcript sections may be more informative.
+- Overall AUCs are modest, suggesting limited predictability of short-term price moves from earnings calls.
+- Best baseline model TF-IDF + Logistic Regression outperformed neural models, indicating simpler models may suffice.
+
 ## Limitations
 - Bootstrap confidence intervals assume IID samples (violated in financial time series - consider block bootstrap)
-- 
+- Limited sample size and market conditions may affect generalizability
+
 ## Future Work
 - Incorporate sentiment scores
 - Test on different market periods (bull vs bear)
@@ -78,6 +84,14 @@ Binary classification: Market-adjusted return (subtract the market return value)
 ## Setup & Usage
 Installation instructions:
 How to run the code:
+1. Clone the repository
+2. Install dependencies from requirements.txt
+3. Download the Motley Fool transcripts and S&P 500 data from Kaggle and provide the paths in a `.env` file as shown in `.env.example`.
+4. Order of execution (alternatively use the Jupyter notebook `run_me.ipynb`): 
+    - Run data_cleaning_util.py to preprocess transcripts and financial data.
+    - Run the finbert_embed_utils.py to generate FinBERT embeddings. (Alternatively use the python notebook modal_create_bert_embeddings_cache.ipynb in modal to create the embeddings and cache them on disk.)
+    - Run the finbert_model_utils.py to train and evaluate models.
+5. Run the Jupyter notebook `run_me.ipynb` to execute the experiments and view results.
 
 ## References
 Huang, Allen H., Hui Wang, and Yi Yang. "FinBERT: A Large Language Model for Extracting Information from Financial Text." Contemporary Accounting Research (2022).
