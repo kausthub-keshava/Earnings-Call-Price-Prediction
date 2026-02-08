@@ -230,7 +230,7 @@ def tfidf_vectorize(train_df, val_df, test_df, stopwords=STOPWORDS, max_features
 def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_words=False):
     """
     Implements a logistic regression model using TF-IDF text features.
-    Picks the C that maximizes VAL AUC.
+    Picks the C that maximizes val AUC and evaluates on test set.
 
     Returns:
     - best_test_auc: float
@@ -242,7 +242,7 @@ def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_word
 
     best_C = None
     best_model = None
-    best_test_auc = -np.inf
+    best_val_auc = -np.inf
 
     for C in Cs:
         text_model = LogisticRegression(C=C, solver="liblinear", max_iter=2000)
@@ -250,14 +250,17 @@ def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_word
 
         val_probs = text_model.predict_proba(X_val_tfidf)[:, 1]
         val_auc = roc_auc_score(y_val, val_probs)
+        val_accuracy = accuracy_score(y_val, text_model.predict(X_val_tfidf))
 
         if val_auc > best_val_auc:
+            best_probs= val_probs
+            best_val_auc = val_auc
+            best_val_accuracy = val_accuracy
             best_C = C
-            best_model = text_model
+            best_model = text_model(C=best_C)
 
-    # After selecting best model based on validation AUC, evaluate on test set
-    best_probs = best_model.predict_proba(X_test_tfidf)[:, 1]
-    best_test_auc = roc_auc_score(y_test, best_probs)
+    best_test_probs = best_model.predict_proba(X_test_tfidf)[:, 1]
+    best_test_auc = roc_auc_score(y_test, best_test_probs)
     best_test_accuracy = accuracy_score(y_test, best_model.predict(X_test_tfidf))
 
     if not return_top_words:
@@ -278,15 +281,15 @@ def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_word
     return best_probs,best_test_auc, best_test_accuracy, top_words
 
 
-def finance_tfidf_model(features_base_train, X_train_fin, y_train, features_base_val, X_val_tfidf,  features_base_test, X_test_fin, y_test,
+def finance_tfidf_model(features_base_train, y_train, features_base_val, X_val_tfidf,  features_base_test, y_test,
                         X_train_tfidf, X_test_tfidf, C=1.0):
     '''
     Implements a logistic regression model using both financial and TF-IDF text features.
     
     Parameters:
-    - X_train_fin: array-like, financial features for the training set.
+    - features_base_train: array-like, financial features for the training set.
     - y_train: array-like, true labels for the training set.
-    - X_test_fin: array-like, financial features for the test set.
+    - features_base_test: array-like, financial features for the test set.
     - y_test: array-like, true labels for the test set.
     - X_train_tfidf: array-like, TF-IDF text features for the training set.
     - X_test_tfidf: array-like, TF-IDF text features for the test set.
