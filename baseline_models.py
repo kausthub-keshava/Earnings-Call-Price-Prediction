@@ -230,7 +230,7 @@ def tfidf_vectorize(train_df, val_df, test_df, stopwords=STOPWORDS, max_features
 def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_words=False):
     """
     Implements a logistic regression model using TF-IDF text features.
-    Picks the C that maximizes TEST AUC (as requested).
+    Picks the C that maximizes VAL AUC.
 
     Returns:
     - best_test_auc: float
@@ -248,16 +248,17 @@ def tfidf_run(train_df, val_df, test_df, y_train, y_val, y_test, return_top_word
         text_model = LogisticRegression(C=C, solver="liblinear", max_iter=2000)
         text_model.fit(X_train_tfidf, y_train)
 
-        test_probs = text_model.predict_proba(X_test_tfidf)[:, 1]
-        test_auc = roc_auc_score(y_test, test_probs)
-        test_accuracy = accuracy_score(y_test, text_model.predict(X_test_tfidf))
+        val_probs = text_model.predict_proba(X_val_tfidf)[:, 1]
+        val_auc = roc_auc_score(y_val, val_probs)
 
-        if test_auc > best_test_auc:
-            best_probs= test_probs
-            best_test_auc = test_auc
-            best_test_accuracy = test_accuracy
+        if val_auc > best_val_auc:
             best_C = C
             best_model = text_model
+
+    # After selecting best model based on validation AUC, evaluate on test set
+    best_probs = best_model.predict_proba(X_test_tfidf)[:, 1]
+    best_test_auc = roc_auc_score(y_test, best_probs)
+    best_test_accuracy = accuracy_score(y_test, best_model.predict(X_test_tfidf))
 
     if not return_top_words:
         return best_probs,best_test_auc, best_test_accuracy
